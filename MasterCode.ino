@@ -74,6 +74,7 @@ void setup() {
   bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
   bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
+  bmp.readAltitude(SEALEVELPRESSURE_HPA);
 
   Serial.print("Initializing SD card...");
 

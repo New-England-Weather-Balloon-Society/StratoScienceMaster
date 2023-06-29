@@ -1,5 +1,5 @@
 # StratoScienceMaster
-The masta code
+#The masta code
 
 
 As part of our class called "StratoScience Lab," 2 of our students are testing Ozone levels in the atmosphere, and the other is measuring wind levels and the power generated from it.

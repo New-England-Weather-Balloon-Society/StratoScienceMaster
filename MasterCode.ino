@@ -165,12 +165,13 @@ void loop() {
     // print to the serial port too:
     Serial.print("UV0: ");
     Serial.println(dataString0);
+    dataFile0.close();
   }
   // if the file isn't open, pop up an error:
   else {
     Serial.println("error opening datalog.txt");
   }
-  dataFile0.close();
+  
   File dataFile1 = SD.open("datalog1.txt", FILE_WRITE);
 
   if (dataFile1) {
@@ -179,12 +180,13 @@ void loop() {
     // print to the serial port too:
     Serial.print("UV1: ");
     Serial.println(dataString1);
+    dataFile1.close();
   }
   // if the file isn't open, pop up an error:
   else {
     Serial.println("error opening datalog1.txt");
   }
-  dataFile1.close();
+  
 
 
 ///Write Pressure Sensor to SD Card
@@ -193,6 +195,7 @@ void loop() {
 
   if (dataFile3) {
     dataFile3.println(dataString3);
+    dataFile3.close();
 
     // print to the serial port too:
     Serial.print("BMP388: "); 
@@ -206,7 +209,7 @@ void loop() {
   else {
     Serial.println("error opening datalog3.txt");
   }
-  dataFile3.close();
+  
   
   int sensorValue = analogRead(wm_pin);
   
@@ -228,12 +231,13 @@ void loop() {
     
     // print to the serial port too:
     Serial.println(buf);
+    wm_data_file.close();
   }
   // if the file isn't open, pop up an error:
   else {
     Serial.println("error opening " + WM_DATA_FILE_NAME);
   }
-  wm_data_file.close();
+  
 
 
 

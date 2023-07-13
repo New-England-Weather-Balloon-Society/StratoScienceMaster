@@ -1,247 +1,183 @@
-#include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include "Adafruit_BMP3XX.h"
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+//      This is the Main Flight Computer for the StratoScience portion of the HABGab 2023 Flight.      //
+//      This controls the two of three onboard cutdown systems,                                        //
+//      and the Ozone and Power generation experiments.                                                //
+//                                                                                                     //
+//      Contributers:                                                                                  //
+//      Amish Chawla                                                                                   //
+//      Tarun Kumar                                                                                    //
+//      Seth Kendall                                                                                   //
+//      Max Kendall                                                                                    //
+//                                                                                                     //
+//      and of course...                                                                               //
+//      Mikal Hart for the excellent TinyGPSPlus library                                               //
+//                                                                                                     //
+//      Last Updated: July 12, 2023, version 2.0.6                                                     //
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//Libraries
 #include <SPI.h>
 #include <SD.h>
+#include <NeoSWSerial.h>
+#include <TinyGPSPlus.h>
 
+//Pin Numbers
 #define CUTDOWN_HELO 9
 #define CUTDOWN_GLIDER 10
 #define CUTDOWN_HELO_TOAPRS 7
 #define CUTDOWN_GLIDER_TOAPRS 8
-#define BMP_SCK 13
-#define BMP_MISO 12
-#define BMP_MOSI 11
-#define BMP_CS 10
-float SEALEVELPRESSURE_HPA (1013.25);
+#define GPS_RX_PIN 6
+#define GPS_TX_PIN 3
+#define SD_CHIP_SELECT 4
+#define UV_AIN A0
+#define UV_AIN1 A1
+#define WM_PIN A2
 
-Adafruit_BMP3XX bmp;
+//Constants
+#define SEALEVELPRESSURE_HPA 1013.25
+#define VOLTAGE_DIVIDER 0.25
+#define RESISTANCE_IN_OHMS 120  // 120 Ohms
 
-//#include <I2C.h>
-int uv_ain = A0;
-int ad_value;
-int uv_ain1 = A1;
-int ad_value1;
-int bmpalt;
+//Objects
+File dataFile;
+TinyGPSPlus gps;
+NeoSWSerial ss(GPS_RX_PIN, GPS_TX_PIN);
 
-int wm_pin = A2;
-
-const float voltageDivider = .25;
-const int resistanceInOhms = 120; // 120 Ohms
-
-const int chipSelect = 4;
-
-const String WM_DATA_FILE_NAME = "windmill.txt";
-
+//Value Holders
+int gpsalt;
+bool hasCutGlider = 0;
+bool hasCutHelo = 0;
 
 void setup() {
-  // Open serial communications and wait for port to open:
-  pinMode(uv_ain, INPUT);
-  pinMode(uv_ain1, INPUT);
+  //Serial Communications
+  Serial.begin(9600);
+  ss.begin(38400);
+
+  //Pin Modes
+  pinMode(UV_AIN, INPUT);
+  pinMode(UV_AIN1, INPUT);
   pinMode(CUTDOWN_HELO, OUTPUT);
   pinMode(CUTDOWN_GLIDER, OUTPUT);
   pinMode(CUTDOWN_HELO_TOAPRS, OUTPUT);
   pinMode(CUTDOWN_GLIDER_TOAPRS, OUTPUT);
-  
-  ////Set cutdown pins to LOW
+
+  //Initilize Cutdown Systems
   digitalWrite(CUTDOWN_HELO, LOW);
   digitalWrite(CUTDOWN_HELO_TOAPRS, LOW);
   digitalWrite(CUTDOWN_GLIDER, LOW);
   digitalWrite(CUTDOWN_GLIDER_TOAPRS, LOW);
 
-  Serial.begin(9600);
-
-    while (!Serial) {
-    ;  // wait for serial port to connect. Needed for native USB port only
-  }
-  //Serial.begin(115200);
-  while (!Serial)
-    ;
-  //Serial.println("Adafruit BMP388 / BMP390 test");
-
-
-  if (!bmp.begin_I2C()) {  // hardware I2C mode, can pass in address & alt Wire
-                           //if (! bmp.begin_SPI(BMP_CS)) {  // hardware SPI mode
-                           //if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // software SPI mode
-    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
+  if (!SD.begin(SD_CHIP_SELECT)) {
+    Serial.println("Fix card");
     while (1)
       ;
   }
-
-
-  // Set up oversampling and filter initialization
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
-
-  bmp.readAltitude(SEALEVELPRESSURE_HPA);
-
-  Serial.print("Initializing SD card...");
-
-  // see if the card is present and can be initialized:
-  if (!SD.begin(chipSelect)) {
-    Serial.println("Card failed, or not present");
-    // don't do anything more:
-    while (1)
-      ;
-  }
-  Serial.println("card initialized.");
-  //SEALEVELPRESSURE_HPA = bmp.pressure / 100.0;
+  Serial.println("Card initialized.");
+  delay(1000);
 }
 
 void loop() {
+  while (ss.available() > 0) {
+    if (gps.encode(ss.read())) {
+      if (gps.altitude.isValid()) {
+        Serial.println("VALID!");
+        gpsalt = gps.altitude.meters();
+      }
+      else{ Serial.println("INVALID Altitude");}
 
-  /////BMP380 code
-  /*if (!bmp.performReading()) {
-    Serial.println("Failed to perform reading :(");
-    return;
-  }
-  Serial.print("Temperature = ");
-  Serial.print(bmp.temperature);
-  Serial.println(" *C");
+      dataFile = SD.open("GPSdata.txt", FILE_WRITE);
+      if (dataFile) {
+        dataFile.println(gpsalt);
+        dataFile.close();
 
-  Serial.print("Pressure = ");
-  Serial.print(bmp.pressure / 100.0);
-  Serial.println(" hPa");
 
-  Serial.print("Approx. Altitude = ");
-  Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
-  Serial.println(" m");
+        Serial.println("GPS Altitude: " + (String)gpsalt);
+      } else {
+        Serial.print("Error opening ");
+        Serial.println("GPSdata.txt");
+      }
 
-  Serial.println();*/
-
-  ////CUTDOWN CODE
-  bmpalt = (bmp.readAltitude(SEALEVELPRESSURE_HPA));
-
-  ///If altitude is above 80k ft
-  if (bmpalt >= 24384){
-    delay(500);
-    ///Check again
-    bmpalt = (bmp.readAltitude(SEALEVELPRESSURE_HPA));
-      if (bmpalt >= 24384){
-          ///CUT DOWN THE GLIDER
+//////CUT DOWN GLIDER
+      if ((gpsalt >= 24384) && !hasCutGlider) {
+        Serial.println("Detected Cutdown Altitude - Helo");
+        delay(500);
+        if (gps.altitude.isValid()) {   
+          gpsalt = gps.altitude.meters();
+        }
+        if (gpsalt >= 24384) {
+          Serial.println("CUTTING DOWN GLIDER!");
           digitalWrite(CUTDOWN_GLIDER, HIGH);
-          delay (5000);
+          delay(5000);
           digitalWrite(CUTDOWN_GLIDER, LOW);
+          Serial.println("GLIDER IS AWAY!");
           digitalWrite(CUTDOWN_GLIDER_TOAPRS, HIGH);
+          hasCutGlider = 1;
+        }
       }
-  }
-
-  ///If altitude is above 81k ft
-  if (bmpalt >= 24688){
-    delay(500);
-    ///Check again
-    bmpalt = (bmp.readAltitude(SEALEVELPRESSURE_HPA));
-      if (bmpalt >= 24688){
-          ///CUT DOWN THE HELO
+/////CUT DOWN HELO
+      if ((gpsalt >= 24689) && !hasCutHelo) {
+        Serial.println("Detected Cutdown Altitude - Helo");
+        delay(500);
+        if (gps.altitude.isValid()) {
+          gpsalt = gps.altitude.meters();
+        }
+        if (gpsalt >= 24689) {
+          Serial.println("CUTTING DOWN HELO!");
           digitalWrite(CUTDOWN_HELO, HIGH);
-          delay (5000);
+          delay(5000);
           digitalWrite(CUTDOWN_HELO, LOW);
+          Serial.println("HELO IS AWAY!");
           digitalWrite(CUTDOWN_HELO_TOAPRS, HIGH);
+          hasCutHelo = 1;
+        }
       }
+
+      recordData("UV0.txt", UV_AIN, "UV0: ");
+      recordData("UV1.txt", UV_AIN1, "UV1: ");
+      recordWindmillData("windmill.txt", WM_PIN, "WM: ");
+
+      Serial.println("---------------------------------------------------------------");
+      delay(250);
+    }
   }
-
-
-  /////UV Sensor code
-  bmpalt = (bmp.readAltitude(SEALEVELPRESSURE_HPA));
-  ad_value = analogRead(uv_ain);
-  ad_value1 = analogRead(uv_ain1);  
-  
-  // make a string for assembling the data to log:
-  String dataString0 = (String)ad_value;
-  String dataString1 = (String)ad_value1;
-  String dataString3 = (String)bmpalt;
-
-  //dataString = dataString + "Temp: " + (String)DHT.temperature + " Humidity: " + (String)DHT.humidity;
-
-  // open the file. note that only one file can be open at a time,
-  // so you have to close this one before opening another.
-  File dataFile0 = SD.open("datalog0.txt", FILE_WRITE);
-
-
-  // if the file is available, write to it:
-  if (dataFile0) {
-    dataFile0.println(dataString0);
-
-    // print to the serial port too:
-    Serial.print("UV0: ");
-    Serial.println(dataString0);
-    dataFile0.close();
-  }
-  // if the file isn't open, pop up an error:
-  else {
-    Serial.println("error opening datalog.txt");
-  }
-  
-  File dataFile1 = SD.open("datalog1.txt", FILE_WRITE);
-
-  if (dataFile1) {
-    dataFile1.println(dataString1);
-
-    // print to the serial port too:
-    Serial.print("UV1: ");
-    Serial.println(dataString1);
-    dataFile1.close();
-  }
-  // if the file isn't open, pop up an error:
-  else {
-    Serial.println("error opening datalog1.txt");
-  }
-  
-
-
-///Write Pressure Sensor to SD Card
-
-  File dataFile3 = SD.open("datalog3.txt", FILE_WRITE);
-
-  if (dataFile3) {
-    dataFile3.println(dataString3);
-    dataFile3.close();
-
-    // print to the serial port too:
-    Serial.print("BMP388: "); 
-    Serial.println(dataString3);
-    //Serial.print("Pressure: ");
-    Serial.println(bmp.pressure / 100.0);
-    //Serial.print("Altitude: ");
-    Serial.println(bmp.readAltitude(SEALEVELPRESSURE_HPA));
-  }
-  // if the file isn't open, pop up an error:
-  else {
-    Serial.println("error opening datalog3.txt");
-  }
-  
-  
-  int sensorValue = analogRead(wm_pin);
-  
-  float voltageMeasuredInMilliVolts = sensorValue * (5.0 / 1023.0) * 1000 / voltageDivider ;
-  float powerGeneratedInMicrowatts = voltageMeasuredInMilliVolts * voltageMeasuredInMilliVolts / resistanceInOhms;
-
-  String buf;
-  buf += String("WM:");
-  buf += String(sensorValue, 3);
-  buf += F(",");
-  buf += String(voltageMeasuredInMilliVolts, 3);
-  buf += F(",");
-  buf += String(powerGeneratedInMicrowatts, 6);
-  File wm_data_file = SD.open(WM_DATA_FILE_NAME, FILE_WRITE);
-
-  // if the file is available, write to it:
-  if (wm_data_file) {
-    wm_data_file.println(buf);
-    
-    // print to the serial port too:
-    Serial.println(buf);
-    wm_data_file.close();
-  }
-  // if the file isn't open, pop up an error:
-  else {
-    Serial.println("error opening " + WM_DATA_FILE_NAME);
-  }
-  
-
-
-
-  delay(100);
 }
 
+void recordData(const char* fileName, int pin, const char* message) {
+  dataFile = SD.open(fileName, FILE_WRITE);
+  if (dataFile) {
+    int sensorValue = analogRead(pin);
+    dataFile.println(sensorValue);
+    dataFile.close();
+  } else {
+    Serial.print("Error opening ");
+    Serial.println(fileName);
+  }
+  Serial.print(message);
+  Serial.println(analogRead(pin));
+  //delay(250);
+}
+
+void recordWindmillData(const char* fileName, int pin, const char* message) {
+  dataFile = SD.open(fileName, FILE_WRITE);
+  if (dataFile) {
+    int sensorValue = analogRead(pin);
+    float voltageMeasuredInMilliVolts = sensorValue * (5.0 / 1023.0) * 1000 / VOLTAGE_DIVIDER;
+    float powerGeneratedInMicrowatts = voltageMeasuredInMilliVolts * voltageMeasuredInMilliVolts / RESISTANCE_IN_OHMS;
+    dataFile.print(sensorValue, 3);
+    dataFile.print(",");
+    dataFile.print(voltageMeasuredInMilliVolts, 3);
+    dataFile.print(",");
+    dataFile.println(powerGeneratedInMicrowatts, 6);
+    Serial.print(message);
+    Serial.print(sensorValue, 3);
+    Serial.print(",");
+    Serial.print(voltageMeasuredInMilliVolts, 3);
+    Serial.print(",");
+    Serial.println(powerGeneratedInMicrowatts, 6);
+    dataFile.close();
+  } else {
+    Serial.print("error opening ");
+    Serial.println(fileName);
+  }
+  //delay(250);
+}

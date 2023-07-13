@@ -12,7 +12,7 @@
 //      and of course...                                                                               //
 //      Mikal Hart for the excellent TinyGPSPlus library                                               //
 //                                                                                                     //
-//      Last Updated: July 12, 2023, version 2.0.6                                                     //
+//      Last Updated: July 13, 2023, version 2.0.7                                                     //
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //Libraries
@@ -82,26 +82,36 @@ void loop() {
       if (gps.altitude.isValid()) {
         Serial.println("VALID!");
         gpsalt = gps.altitude.meters();
+      } else {
+        Serial.println("INVALID Altitude");
       }
-      else{ Serial.println("INVALID Altitude");}
 
       dataFile = SD.open("GPSdata.txt", FILE_WRITE);
       if (dataFile) {
-        dataFile.println(gpsalt);
+        dataFile.print(gpsalt);
+        dataFile.print(",");
+        dataFile.print(gps.location.lat(), 6);
+        dataFile.print(",");
+        dataFile.println(gps.location.lng(), 6);
         dataFile.close();
 
 
-        Serial.println("GPS Altitude: " + (String)gpsalt);
+        Serial.print("GPS Altitude: ");
+        Serial.print(gpsalt);
+        Serial.print(", Latitude: ");
+        Serial.print(gps.location.lat(), 6);
+        Serial.print(", Longitude: ");
+        Serial.println(gps.location.lng(), 6);
       } else {
         Serial.print("Error opening ");
         Serial.println("GPSdata.txt");
       }
 
-//////CUT DOWN GLIDER
+      //////CUT DOWN GLIDER
       if ((gpsalt >= 24384) && !hasCutGlider) {
         Serial.println("Detected Cutdown Altitude - Helo");
         delay(500);
-        if (gps.altitude.isValid()) {   
+        if (gps.altitude.isValid()) {
           gpsalt = gps.altitude.meters();
         }
         if (gpsalt >= 24384) {
@@ -114,7 +124,7 @@ void loop() {
           hasCutGlider = 1;
         }
       }
-/////CUT DOWN HELO
+      /////CUT DOWN HELO
       if ((gpsalt >= 24689) && !hasCutHelo) {
         Serial.println("Detected Cutdown Altitude - Helo");
         delay(500);

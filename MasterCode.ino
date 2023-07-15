@@ -8,6 +8,7 @@
 //      Tarun Kumar                                                                                    //
 //      Seth Kendall                                                                                   //
 //      Max Kendall                                                                                    //
+//      Charlie Nicholson                                                                              //
 //                                                                                                     //
 //      and of course...                                                                               //
 //      Mikal Hart for the excellent TinyGPSPlus library                                               //

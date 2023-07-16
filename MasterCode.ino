@@ -135,7 +135,7 @@ void loop() {
         if (gpsalt >= 24689) {
           Serial.println("CUTTING DOWN HELO!");
           digitalWrite(CUTDOWN_HELO, HIGH);
-          delay(5000);
+          delay(9000);
           digitalWrite(CUTDOWN_HELO, LOW);
           Serial.println("HELO IS AWAY!");
           digitalWrite(CUTDOWN_HELO_TOAPRS, HIGH);
